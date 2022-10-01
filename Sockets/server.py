@@ -13,40 +13,50 @@ def findPort():
             print("PORT: ", str(port))
             return port
 
+
+# TCP
+
+# get the request code from input
+reqCode = int(sys.argv[1])
+
+# instantiate a socket for TCP 
+tcpServerSocket = socket(AF_INET, SOCK_STREAM)
+# bind the socket to 127.0.0.1 and let it pick an open port
+tcpServerSocket.bind(("127.0.0.1", 0))
+# get the port the socket chose, this is nPort
+nPort = tcpServerSocket.getsockname()[1]
+
+# let the socket start listening?
+tcpServerSocket.listen(1)
+
 while True:
-
-    # TCP
-
-    # get the request code from input
-    reqCode = int(sys.argv[1])
-    # get an open port
-    nPort = findPort()
-    # instantiate a socket for TCP 
-    serverSocket = socket(AF_INET, SOCK_STREAM)
-    serverSocket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-
-    # bind the socket to a host and port
-    serverSocket.bind(("127.0.0.1", nPort))
-    # let the socket start listening?
-    serverSocket.listen(1)
     # let the client know (in terminal) that the server is listening on nPort
     print("TCP ready to serve")
     print("SERVER_PORT="+str(nPort))
 
     # open the socket for accepting?
-    connectionSocket, address = serverSocket.accept()
+    connectionSocket, address = tcpServerSocket.accept()
     # recieve the request code from the client
     incomingReqCode = int(connectionSocket.recv(1024).decode())
 
     rPort = -1
     # if the request code does not match, close the socket and send an error message
     if(incomingReqCode != reqCode):
+        # send error message
         connectionSocket.send(str(rPort).encode())
-        serverSocket.close()
-        #exit(1)
-    # if it does match send back an rPort to make the subsequent requests
+        #close the socket
+        tcpServerSocket.close()
+        break
+    # if it does match set up a UDP connection and send back an rPort to make 
+    # the subsequent requests
     else:
-        rPort = findPort()
+        # set up a UDP connection
+        udpServerSocket = socket(AF_INET, SOCK_DGRAM)
+        # bind to an addr and open port
+        udpServerSocket.bind(("127.0.0.1", 0))
+        # get the rPort
+        rPort = udpServerSocket.getsockname()[1]
+        # send the rPort to the client
         connectionSocket.send(str(rPort).encode())
 
 
@@ -54,20 +64,19 @@ while True:
     # UDP
 
     if(rPort != -1):
-        # instantiate a socket for UDP
-        serverSocket = socket(AF_INET, SOCK_DGRAM)
 
-        # bind the socket to a host and rPort
-        serverSocket.bind(("", rPort))
-        print("UDP ready to serve")
-
-        # recieve a message from client, decode it, reverse the string and send it back
         while True:
-            message, clientAddress = serverSocket.recvfrom(2048)
+            #recieve the message and address from the client
+            message, clientAddress = udpServerSocket.recvfrom(2048)
+            # decode the message
             message = message.decode()
+            # if the message is exit then close the socket and start over
             if(message == "EXIT"):
+                udpServerSocket.close() #?
                 connectionSocket.close()
                 break
+            # reverse the message
             modifiedMessage = message[::-1]
-            serverSocket.sendto(modifiedMessage.encode(), clientAddress)
+            # send the message back to the client
+            udpServerSocket.sendto(modifiedMessage.encode(), clientAddress)
             
