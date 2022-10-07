@@ -1,40 +1,56 @@
 import sys
 from socket import *
 
-# function to find an open port
-def findPort():
-    for port in range(1024, 65535):
-        s = socket(AF_INET, SOCK_STREAM)
-        s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        test = s.connect_ex(("127.0.0.1", port))
-        #print(test)
-        if(test == 0):
-            print(s)
-            print("PORT: ", str(port))
-            return port
+# function to get a TCP socket
+def getTCPConnection(serverName):
+    # instantiate a socket for TCP 
+    tcpServerSocket = socket(AF_INET, SOCK_STREAM)
+    # bind the socket to 127.0.0.1 and let it pick an open port
+    tcpServerSocket.bind((serverName, 0))
+    return tcpServerSocket
 
+# function to get a UDP socket
+def getUDPConnection(serverName):
+    # instantiate a UDP connection
+    udpServerSocket = socket(AF_INET, SOCK_DGRAM)
+    # bind to an addr and open port
+    udpServerSocket.bind((serverName, 0))
+    return udpServerSocket
 
-# TCP
-
+# check number of arguments
+if(len(sys.argv) < 2 or len(sys.argv) > 2):
+    print("incorrect number of arguments")
+    exit(1)
 # get the request code from input
-reqCode = int(sys.argv[1])
+try:
+    reqCode = int(sys.argv[1])
+except:
+    print("reqCode is not an integer")
+    exit(1)
+
+# server name, must be a string
+serverName = ""
+# check if server name is a string
+if(type(serverName) != str):
+    print("server name must be a string")
+    exit(1)
 
 # instantiate a socket for TCP 
-tcpServerSocket = socket(AF_INET, SOCK_STREAM)
-# bind the socket to 127.0.0.1 and let it pick an open port
-tcpServerSocket.bind(("127.0.0.1", 0))
+tcpServerSocket = getTCPConnection(serverName)
+
 # get the port the socket chose, this is nPort
 nPort = tcpServerSocket.getsockname()[1]
 
-# let the socket start listening?
+# let the socket start listening
 tcpServerSocket.listen(1)
 
-while True:
-    # let the client know (in terminal) that the server is listening on nPort
-    print("TCP ready to serve")
-    print("SERVER_PORT="+str(nPort))
+# let the client know (in terminal) that the server is listening on nPort
+print("TCP ready to serve")
+print("SERVER_PORT="+str(nPort))
 
-    # open the socket for accepting?
+while True:
+
+    # wait for client connection
     connectionSocket, address = tcpServerSocket.accept()
     # recieve the request code from the client
     incomingReqCode = int(connectionSocket.recv(1024).decode())
@@ -44,27 +60,20 @@ while True:
     if(incomingReqCode != reqCode):
         # send error message
         connectionSocket.send(str(rPort).encode())
-        #close the socket
-        tcpServerSocket.close()
-        break
+        # close the tcp connection
+        connectionSocket.close()
     # if it does match set up a UDP connection and send back an rPort to make 
     # the subsequent requests
     else:
         # set up a UDP connection
-        udpServerSocket = socket(AF_INET, SOCK_DGRAM)
-        # bind to an addr and open port
-        udpServerSocket.bind(("127.0.0.1", 0))
+        udpServerSocket = getUDPConnection(serverName)
         # get the rPort
         rPort = udpServerSocket.getsockname()[1]
         # send the rPort to the client
         connectionSocket.send(str(rPort).encode())
 
-
-
-    # UDP
-
+    # loop to recieve messages
     if(rPort != -1):
-
         while True:
             #recieve the message and address from the client
             message, clientAddress = udpServerSocket.recvfrom(2048)
@@ -72,8 +81,7 @@ while True:
             message = message.decode()
             # if the message is exit then close the socket and start over
             if(message == "EXIT"):
-                udpServerSocket.close() #?
-                connectionSocket.close()
+                udpServerSocket.close()
                 break
             # reverse the message
             modifiedMessage = message[::-1]
