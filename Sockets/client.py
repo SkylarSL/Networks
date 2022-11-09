@@ -1,6 +1,4 @@
 from email import message
-from operator import mod
-from sre_compile import isstring
 import sys
 from socket import *
 
@@ -8,7 +6,11 @@ def getTCPConnection(serverName, nPort):
     # initiate a TCP connection
     tcpClientSocket = socket(AF_INET, SOCK_STREAM)
     # connect to the server on the specified nPort (specified by the server)
-    tcpClientSocket.connect((serverName, nPort))
+    try:
+        tcpClientSocket.connect((serverName, nPort))
+    except:
+        print("server name/address not known or wrong port")
+        exit(1)
     return tcpClientSocket
 
 # check for number of arguments
