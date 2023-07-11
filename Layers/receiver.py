@@ -24,7 +24,7 @@ def seqnummod(x):
     return x % 32
 
 # set up a UDP connection
-udpServerSocket = getUDPConnection(emulatoraddr, receiverport)
+udpServerSocket = getUDPConnection("", receiverport)
 
 file = open(filename, "w")
 file.write("")
@@ -47,7 +47,7 @@ while True:
     seqnum = packet.seqnum
     type = packet.typ
     message = packet.data
-    print(type)
+    
     if seqnum == seqnummod(expectedseqnum):
         if type == 2:
             # send the message back to the client

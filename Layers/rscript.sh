@@ -1,1 +1,1 @@
-python3 receiver.py "" 38387 29788 output.txt
+python3 receiver.py "ubuntu2004-008" 38387 29788 output.txt

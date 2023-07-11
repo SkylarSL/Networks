@@ -1,1 +1,1 @@
-python3 network_emulator.py 28732 "" 29788 38387 "" 10345 0 0.1 1
+python3 network_emulator.py 28732 "ubuntu2004-004" 29788 38387 "ubuntu2004-002" 10345 0 0 1

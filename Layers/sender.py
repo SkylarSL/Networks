@@ -1,21 +1,19 @@
 from packet import Packet
 import sys
 from socket import *
-# experiments
 from threading import Thread, Timer, Lock, Condition
 
-# open log files
-
-
 #global variables
-windowsize = 1 # window size
-acklock = Lock()
-ackcond = Condition(acklock)
-udpClientSocket = socket(AF_INET, SOCK_DGRAM)
-i = 0
+i = 0 # variables for window size
+windowsize = 1 # variables for window size
+acklock = Lock() 
+ackcond = Condition(acklock) # conditional lock to sync sender and receiver
+udpClientSocket = socket(AF_INET, SOCK_DGRAM) 
 expectedseqnum = 0
 numpackets = 0
 timestamp = 0
+
+# log files
 seqnumlog = open("seqnum.log", "w")
 seqnumlog.write("")
 acklog = open("ack.log", "w")
@@ -41,7 +39,7 @@ filename = sys.argv[5]
 def timerupfunc():
     global windowsize, i, timeout, Nlog, timestamp
     windowsize = 1
-    Nlog.write(str(windowsize) + "\n")
+    Nlog.write("t=" + str(timestamp) + " " + str(windowsize) + "\n")
     if i < len(window):
         udpClientSocket.sendto(Packet.encode(window[i]), (emulatoraddr, emulatorport))
         seqnumlog.write("t=" + str(timestamp) + " " + str(window[i].seqnum) + "\n")
@@ -50,16 +48,20 @@ def timerupfunc():
     with ackcond:
         ackcond.notify()
     return 0
+# initialize timer
 timer = Timer(timeout/1000, timerupfunc)
+# create and start a new timer
 def newtimer():
     global timer, timerup, timeout
     timer.cancel()
     timer = Timer(timeout/1000, timerupfunc)
     timer.start()
     return 0
+# stop the timer
 def stoptimer():
     timer.cancel()
 
+# simple func to calculate x mod32
 def seqnummod(x):
     return x % 32
 
@@ -84,20 +86,22 @@ window.append(newpacket)
 sentpackets = []
 numpackets = sequencenum + 1
 
-ackwindow = [x.seqnum for x in window]
+# separate window to keep track of ACKed packets
+ackwindow = [x.typ for x in window]
 
 Nlog.write("t=" + str(timestamp) + " " + str(windowsize) + "\n")
 timestamp += 1
+
+# send thread
 def send():
+
+    # global variables
     global window, ackwindow, windowsize, ackcond, i, sentpackets, udpClientSocket, seqnumlog, Nlog, timestamp
 
-    # check if window is full
-    while True:
-        
-        # check for unacknowledged packets
-        fullwindow = True
-        with ackcond:
-            # initialize, first send
+    with ackcond:
+        while True:     
+            fullwindow = True
+            # initialization, first send
             if i == 0:
                 windowsize = 1
                 udpClientSocket.sendto(Packet.encode(window[i]), (emulatoraddr, emulatorport))
@@ -116,7 +120,11 @@ def send():
                         if ackwindow[packet] != 0 and window[packet] not in sentpackets:
                             fullwindow = False
                             break
-                
+            
+            # close application if last packet (EOT) is acknowledged
+            if i >= len(ackwindow)-1 and ackwindow[i-1] == 0:
+                exit()
+
             # send packets
             if (not fullwindow) and i != 0:
                 udpClientSocket.sendto(Packet.encode(window[i]), (emulatoraddr, emulatorport))
@@ -126,15 +134,16 @@ def send():
                 i += 1
                 ackcond.notify()
 
+# receive thread
 def receive():
-    global window, windowsize, expectedseqnum, i, ackcond, udpClientSocket, acklog, Nlog, seqnumlog, timestamp
+    global ackwindow, window, windowsize, expectedseqnum, i, ackcond, udpClientSocket, acklog, Nlog, seqnumlog, timestamp
 
     # bind to an addr and open port
-    udpClientSocket.bind((emulatoraddr, senderport))
+    udpClientSocket.bind(("", senderport))
     
+    # pair to track duplicate acks
     dupack = [-1, 0]
     with ackcond:
-        
         while True:
             # only wait if there are still packets to be sent
             if len(sentpackets) <= numpackets:
@@ -143,10 +152,13 @@ def receive():
             # recieve the packet
             message, serverAddress = udpClientSocket.recvfrom(1024)
             packet = Packet(message)
-
             seqnum = seqnummod(packet.seqnum)
             type = packet.typ
 
+            # cumulative ACKs
+            for p in range(0, i):
+                ackwindow[p] = 0
+                
             # ACK for EOT packet
             if type == 2:
                 # check if all packets have been sent
@@ -157,14 +169,10 @@ def receive():
                     seqnumlog.close()
                     Nlog.close()
                     acklog.close()
-                    exit()
+                    break
             else:
                 acklog.write("t=" + str(timestamp) + " " + str(packet.seqnum) + "\n")
             timestamp += 1
-
-            # cumulative ACKs
-            for packet in range(0, i):
-                ackwindow[packet] = 0
 
             # if the packet is a duplicate
             if seqnum == dupack[0]:
@@ -182,7 +190,6 @@ def receive():
                 if windowsize < 10:
                     windowsize += 1
                     Nlog.write("t=" + str(timestamp) + " " + str(windowsize) + "\n")
-                    timestamp += 1
                 if len(sentpackets) <= numpackets:
                     ackcond.notify()
                 dupack = [seqnum, 0]
@@ -191,12 +198,16 @@ def receive():
             if dupack[1] >= 3:
                 windowsize = 1
                 Nlog.write("t=" + str(timestamp) + " " + str(windowsize) + "\n")
-                timestamp += 1
                 udpClientSocket.sendto(Packet.encode(window[dupack[0]]), (emulatoraddr, emulatorport))
                 seqnumlog.write("t=" + str(timestamp) + " " + str(window[i].seqnum) + "\n")
-                timestampe += 1
+                timestamp += 1
                 newtimer()
+        
+        # notify last packet to close application
+        ackcond.notifyAll()
+        exit()
 
+# threads
 senderfunc = Thread(target=send, name="send")
 receiverfunc = Thread(target=receive, name="receive")
 

@@ -1,1 +1,1 @@
-python3 sender.py "" 28732 10345 200 file.txt
+python3 sender.py "ubuntu2004-008" 28732 10345 200 file.txt
